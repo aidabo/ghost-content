@@ -6,6 +6,7 @@ import { readFile } from 'fs'
 const readFileAsync = fp => new Promise((resolve, reject) => readFile(fp, (err, data) => err ? reject(err) : resolve(data)))
 const stripLeadingSlash = s => s.indexOf('/') === 0 ? s.substring(1) : s
 const stripEndingSlash = s => s.indexOf('/') === (s.length - 1) ? s.substring(0, s.length - 1) : s
+const ensureEndingSlash = s => (s && s.indexOf('/') !== (s.length - 1)) ? `${s}/` : s
 
 class Store extends BaseStore {
   constructor (config = {}) {
@@ -143,6 +144,52 @@ class Store extends BaseStore {
           Bucket: this.bucket,
           Key: stripLeadingSlash(path)
         }, (err, data) => err ? reject(err) : resolve(data.Body))
+    })
+  }
+
+  list (options = {}) {
+    const rawPrefix = typeof options.prefix === 'string' ? options.prefix : this.pathPrefix
+    const prefix = ensureEndingSlash(stripLeadingSlash(rawPrefix || ''))
+    const limit = Number.parseInt(options.limit, 10)
+    const continuationToken = options.continuationToken || options.next_cursor
+
+    const params = {
+      Bucket: this.bucket,
+      Prefix: prefix,
+      MaxKeys: Number.isNaN(limit) || limit <= 0 ? 100 : Math.min(limit, 1000)
+    }
+
+    if (continuationToken) {
+      params.ContinuationToken = continuationToken
+    }
+
+    return new Promise((resolve, reject) => {
+      this.s3().listObjectsV2(params, (err, data) => {
+        if (err) {
+          reject(err)
+          return
+        }
+
+        const contents = Array.isArray(data.Contents) ? data.Contents : []
+        const items = contents
+          .filter(item => item && item.Key && !item.Key.endsWith('/'))
+          .map(item => ({
+            key: item.Key,
+            url: `${this.host}/${item.Key}`,
+            path: item.Key,
+            name: item.Key.split('/').pop(),
+            size: item.Size,
+            etag: item.ETag,
+            lastModified: item.LastModified
+          }))
+
+        resolve({
+          items,
+          prefix,
+          count: items.length,
+          nextCursor: data.IsTruncated ? data.NextContinuationToken : null
+        })
+      })
     })
   }
 
