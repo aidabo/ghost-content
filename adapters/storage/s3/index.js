@@ -33,6 +33,9 @@ var stripLeadingSlash = function stripLeadingSlash(s) {
 var stripEndingSlash = function stripEndingSlash(s) {
   return s.indexOf('/') === s.length - 1 ? s.substring(0, s.length - 1) : s;
 };
+var ensureEndingSlash = function ensureEndingSlash(s) {
+  return s && s.indexOf('/') !== s.length - 1 ? `${s}/` : s;
+};
 
 class Store extends _ghostStorageBase2.default {
   constructor() {
@@ -183,6 +186,58 @@ class Store extends _ghostStorageBase2.default {
         Key: stripLeadingSlash(path)
       }, function (err, data) {
         return err ? reject(err) : resolve(data.Body);
+      });
+    });
+  }
+
+  list() {
+    var _this6 = this;
+
+    var options = arguments.length > 0 && arguments[0] !== undefined ? arguments[0] : {};
+
+    var rawPrefix = typeof options.prefix === 'string' ? options.prefix : this.pathPrefix;
+    var prefix = ensureEndingSlash(stripLeadingSlash(rawPrefix || ''));
+    var limit = Number.parseInt(options.limit, 10);
+    var continuationToken = options.continuationToken || options.next_cursor;
+
+    var params = {
+      Bucket: this.bucket,
+      Prefix: prefix,
+      MaxKeys: Number.isNaN(limit) || limit <= 0 ? 100 : Math.min(limit, 1000)
+    };
+
+    if (continuationToken) {
+      params.ContinuationToken = continuationToken;
+    }
+
+    return new Promise(function (resolve, reject) {
+      _this6.s3().listObjectsV2(params, function (err, data) {
+        if (err) {
+          reject(err);
+          return;
+        }
+
+        var contents = Array.isArray(data.Contents) ? data.Contents : [];
+        var items = contents.filter(function (item) {
+          return item && item.Key && !item.Key.endsWith('/');
+        }).map(function (item) {
+          return {
+            key: item.Key,
+            url: `${_this6.host}/${item.Key}`,
+            path: item.Key,
+            name: item.Key.split('/').pop(),
+            size: item.Size,
+            etag: item.ETag,
+            lastModified: item.LastModified
+          };
+        });
+
+        resolve({
+          items,
+          prefix,
+          count: items.length,
+          nextCursor: data.IsTruncated ? data.NextContinuationToken : null
+        });
       });
     });
   }

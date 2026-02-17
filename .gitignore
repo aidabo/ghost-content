@@ -1,0 +1,97 @@
+# Node.js
+node_modules/
+.pnpm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+npm-debug.log*
+*.log
+
+# Next.js build output
+.next/
+out/
+.build/
+
+# Vercel deployment
+.vercel/
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Local env files
+.env
+!.env.example
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+pnpm-debug.log*
+yarn-debug.log*
+.yarn-integrity
+.yarn-cache/
+
+# Dependency directories
+node_modules/
+.babelrc
+.pnp.*
+.pnp.js
+
+# Lockfiles
+yarn.lock
+package-lock.json
+pnpm-lock.yaml
+
+# TypeScript
+*.tsbuildinfo
+
+# macOS
+.DS_Store
+
+# Editor files
+.idea/
+.vscode/
+*.swp
+*~
+
+# Coverage directory
+coverage/
+
+# Test and debug files
+*.spec.js
+*.spec.ts
+*.test.js
+*.test.ts
+.jest/
+.jest-cache/
+.jest-test-results.json
+
+# Storybook
+storybook-static/
+
+# Static files
+public/static/
+
+# ESLint cache
+.eslintcache
+
+# Prettier cache
+.prettierignore
+.prettiercache
+
+# Next.js cache
+.next/cache/
+
+# Miscellaneous
+*.zip
+*.rar
+*.7z
+
+# System files
+Thumbs.db
+packages/business/eastate/dist/
+packages/business/portal/dist/
+packages/comments-ui/dist/
+packages/stackpage/
+.techs.md
+
