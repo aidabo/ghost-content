@@ -193,6 +193,48 @@ class Store extends BaseStore {
     })
   }
 
+  getPresignedPutUrl (options = {}) {
+    const key = stripLeadingSlash(String(options.key || '').trim())
+    const contentType = String(options.contentType || 'application/octet-stream').trim()
+    const expiresInSeconds = Number.parseInt(options.expiresInSeconds, 10)
+    const cacheControl = String(options.cacheControl || `max-age=${30 * 24 * 60 * 60}`).trim()
+
+    if (!key) {
+      return Promise.reject(new Error('key is required'))
+    }
+
+    const params = {
+      Bucket: this.bucket,
+      Key: key,
+      ContentType: contentType,
+      CacheControl: cacheControl,
+      Expires: Number.isNaN(expiresInSeconds) || expiresInSeconds <= 0 ? 900 : expiresInSeconds
+    }
+
+    if (this.serverSideEncryption !== '') {
+      params.ServerSideEncryption = this.serverSideEncryption
+    }
+
+    return new Promise((resolve, reject) => {
+      this.s3().getSignedUrl('putObject', params, (err, url) => {
+        if (err) {
+          reject(err)
+          return
+        }
+
+        resolve({
+          uploadUrl: url,
+          key,
+          url: `${this.host}/${key}`,
+          headers: {
+            'Content-Type': contentType,
+            'Cache-Control': cacheControl
+          }
+        })
+      })
+    })
+  }
+
   /**
    * For bugfix to upload media: 
    * TypeError: mediaStorage.urlToPath is not a function
