@@ -242,6 +242,52 @@ class Store extends _ghostStorageBase2.default {
     });
   }
 
+  getPresignedPutUrl() {
+    var _this7 = this;
+
+    var options = arguments.length > 0 && arguments[0] !== undefined ? arguments[0] : {};
+
+    var key = stripLeadingSlash(String(options.key || '').trim());
+    var contentType = String(options.contentType || 'application/octet-stream').trim();
+    var expiresInSeconds = Number.parseInt(options.expiresInSeconds, 10);
+    var cacheControl = String(options.cacheControl || `max-age=${30 * 24 * 60 * 60}`).trim();
+
+    if (!key) {
+      return Promise.reject(new Error('key is required'));
+    }
+
+    var params = {
+      Bucket: this.bucket,
+      Key: key,
+      ContentType: contentType,
+      CacheControl: cacheControl,
+      Expires: Number.isNaN(expiresInSeconds) || expiresInSeconds <= 0 ? 900 : expiresInSeconds
+    };
+
+    if (this.serverSideEncryption !== '') {
+      params.ServerSideEncryption = this.serverSideEncryption;
+    }
+
+    return new Promise(function (resolve, reject) {
+      _this7.s3().getSignedUrl('putObject', params, function (err, url) {
+        if (err) {
+          reject(err);
+          return;
+        }
+
+        resolve({
+          uploadUrl: url,
+          key,
+          url: `${_this7.host}/${key}`,
+          headers: {
+            'Content-Type': contentType,
+            'Cache-Control': cacheControl
+          }
+        });
+      });
+    });
+  }
+
   /**
    * For bugfix to upload media: 
    * TypeError: mediaStorage.urlToPath is not a function
