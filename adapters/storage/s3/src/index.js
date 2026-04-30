@@ -1,12 +1,33 @@
 import AWS from 'aws-sdk'
 import BaseStore from 'ghost-storage-base'
-import { join } from 'path'
+import path, { join } from 'path'
 import { readFile } from 'fs'
 
 const readFileAsync = fp => new Promise((resolve, reject) => readFile(fp, (err, data) => err ? reject(err) : resolve(data)))
 const stripLeadingSlash = s => s.indexOf('/') === 0 ? s.substring(1) : s
 const stripEndingSlash = s => s.indexOf('/') === (s.length - 1) ? s.substring(0, s.length - 1) : s
 const ensureEndingSlash = s => (s && s.indexOf('/') !== (s.length - 1)) ? `${s}/` : s
+const normalizeUploadFilename = (value) => {
+  const raw = String(value || '').trim() || 'upload.bin'
+  const deduped = raw.match(/^(.*\.[a-z0-9]+)-[a-z0-9_-]+$/i)
+  return deduped ? deduped[1] : raw
+}
+const sanitizeFileName = (fileName) => fileName.replace(/[^\w@.]/gi, '-')
+const buildUniqueFileName = async (store, dir, name, ext) => {
+  let index = 0
+
+  while (true) {
+    const append = index ? `-${index}` : ''
+    const filename = ext ? `${name}${append}${ext}` : `${name}${append}`
+    const exists = await store.exists(filename, dir)
+
+    if (!exists) {
+      return join(dir, filename)
+    }
+
+    index += 1
+  }
+}
 
 class Store extends BaseStore {
   constructor (config = {}) {
@@ -86,10 +107,15 @@ class Store extends BaseStore {
 
   save (image, targetDir) {
     const directory = targetDir || this.getTargetDir(this.pathPrefix)
+    const originalName = image && (image.name || image.originalname) || ''
+    const normalizedName = normalizeUploadFilename(originalName)
+    const fileExtension = path.extname(normalizedName)
+    const ext = fileExtension.match(/\.\d+$/) ? null : fileExtension
+    const name = sanitizeFileName(ext ? path.basename(normalizedName, ext) : path.basename(normalizedName))
 
     return new Promise((resolve, reject) => {
       Promise.all([
-        this.getUniqueFileName(image, directory),
+        buildUniqueFileName(this, directory, name, ext),
         readFileAsync(image.path)
       ]).then(([ fileName, file ]) => {
         let config = {
@@ -235,24 +261,15 @@ class Store extends BaseStore {
     })
   }
 
-  /**
-   * For bugfix to upload media: 
-   * TypeError: mediaStorage.urlToPath is not a function
-   * at prepareError (/var/www/sitename/versions/5.89.3/node_modules/@tryghost/mw-error-handler/lib/mw-error-handler.js:113:19)
-   * at Object.query (/var/www/sitename/versions/5.89.3/core/server/api/endpoints/media.js:39:57)
-   * 
-   * @param {*} url 
-   * @returns 
-   */
-   urlToPath(url) {
-      var path = url;
-      if(path.startsWith(this.host)){
-        path = path.replace(this.host, "");
-      }
-      if(path.startsWith("/")){
-        path = path.substring(1);
-      }
-      return path;
+  urlToPath (url) {
+    var path = url
+    if (path.startsWith(this.host)) {
+      path = path.replace(this.host, '')
+    }
+    if (path.startsWith('/')) {
+      path = path.substring(1)
+    }
+    return path
   }
 }
 
