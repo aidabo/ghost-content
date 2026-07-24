@@ -12,7 +12,10 @@ const normalizeUploadFilename = (value) => {
   const deduped = raw.match(/^(.*\.[a-z0-9]+)-[a-z0-9_-]+$/i)
   return deduped ? deduped[1] : raw
 }
-const sanitizeFileName = (fileName) => fileName.replace(/[^\w@.]/gi, '-')
+// Sanitize filename for safe S3 object key. Preserves CJK characters
+// (hiragana/katakana U+3040-30FF, CJK unified U+3400-9FFF) and common
+// safe punctuation so non-Latin filenames remain readable.
+const sanitizeFileName = (fileName) => fileName.replace(/[^\w.\-()+\u3040-\u30ff\u3400-\u9fff]/g, '-')
 const buildUniqueFileName = async (store, dir, name, ext) => {
   let index = 0
 
