@@ -45,8 +45,11 @@ var normalizeUploadFilename = function normalizeUploadFilename(value) {
   var deduped = raw.match(/^(.*\.[a-z0-9]+)-[a-z0-9_-]+$/i);
   return deduped ? deduped[1] : raw;
 };
+// Sanitize filename for safe S3 object key. Preserves CJK characters
+// (hiragana/katakana U+3040-30FF, CJK unified U+3400-9FFF) and common
+// safe punctuation so non-Latin filenames remain readable.
 var sanitizeFileName = function sanitizeFileName(fileName) {
-  return fileName.replace(/[^\w@.]/gi, '-');
+  return fileName.replace(/[^\w.\-()+\u3040-\u30ff\u3400-\u9fff]/g, '-');
 };
 var buildUniqueFileName = function () {
   var _ref = _asyncToGenerator( /*#__PURE__*/regeneratorRuntime.mark(function _callee(store, dir, name, ext) {
