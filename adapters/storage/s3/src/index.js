@@ -89,6 +89,53 @@ class Store extends BaseStore {
     })
   }
 
+  // Bulk-delete every object under a key prefix (S3 has no real "folders" — this
+  // empties a logical folder). Uses ListObjectsV2 + DeleteObjects in batches of
+  // up to 1000 keys, so clearing e.g. a project's artifacts is O(objects/1000)
+  // API calls instead of one deleteObject per file. Returns the count deleted.
+  // Pass a trailing slash for folder semantics (e.g. "chart-jobs/{id}/jobs/") —
+  // an empty prefix is refused to avoid ever emptying the whole bucket.
+  deletePrefix (prefix) {
+    const normalizedPrefix = stripLeadingSlash(String(prefix || ''))
+    if (!normalizedPrefix) {
+      return Promise.resolve(0)
+    }
+
+    const s3 = this.s3()
+    const listPage = (continuationToken) => new Promise((resolve, reject) => {
+      s3.listObjectsV2({
+        Bucket: this.bucket,
+        Prefix: normalizedPrefix,
+        MaxKeys: 1000,
+        ContinuationToken: continuationToken
+      }, (err, data) => err ? reject(err) : resolve(data))
+    })
+    const deleteBatch = (objects) => new Promise((resolve, reject) => {
+      s3.deleteObjects({
+        Bucket: this.bucket,
+        Delete: { Objects: objects, Quiet: true }
+      }, (err, data) => err ? reject(err) : resolve(data))
+    })
+
+    return (async () => {
+      let deleted = 0
+      let continuationToken
+      do {
+        const page = await listPage(continuationToken)
+        const contents = Array.isArray(page && page.Contents) ? page.Contents : []
+        const keys = contents.map(o => ({ Key: o.Key })).filter(o => o.Key)
+        if (keys.length) {
+          // A single ListObjectsV2 page is already <= 1000 keys, so one
+          // DeleteObjects call per page stays within the 1000-key limit.
+          await deleteBatch(keys)
+          deleted += keys.length
+        }
+        continuationToken = page && page.IsTruncated ? page.NextContinuationToken : null
+      } while (continuationToken)
+      return deleted
+    })()
+  }
+
   s3 () {
     const options = {
       bucket: this.bucket,

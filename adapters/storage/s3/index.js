@@ -164,6 +164,98 @@ class Store extends _ghostStorageBase2.default {
     });
   }
 
+  // Bulk-delete every object under a key prefix (S3 has no real "folders" — this
+  // empties a logical folder). Uses ListObjectsV2 + DeleteObjects in batches of
+  // up to 1000 keys, so clearing e.g. a project's artifacts is O(objects/1000)
+  // API calls instead of one deleteObject per file. Returns the count deleted.
+  // Pass a trailing slash for folder semantics (e.g. "chart-jobs/{id}/jobs/") —
+  // an empty prefix is refused to avoid ever emptying the whole bucket.
+  deletePrefix(prefix) {
+    var _this3 = this;
+
+    var normalizedPrefix = stripLeadingSlash(String(prefix || ''));
+    if (!normalizedPrefix) {
+      return Promise.resolve(0);
+    }
+
+    var s3 = this.s3();
+    var listPage = function listPage(continuationToken) {
+      return new Promise(function (resolve, reject) {
+        s3.listObjectsV2({
+          Bucket: _this3.bucket,
+          Prefix: normalizedPrefix,
+          MaxKeys: 1000,
+          ContinuationToken: continuationToken
+        }, function (err, data) {
+          return err ? reject(err) : resolve(data);
+        });
+      });
+    };
+    var deleteBatch = function deleteBatch(objects) {
+      return new Promise(function (resolve, reject) {
+        s3.deleteObjects({
+          Bucket: _this3.bucket,
+          Delete: { Objects: objects, Quiet: true }
+        }, function (err, data) {
+          return err ? reject(err) : resolve(data);
+        });
+      });
+    };
+
+    return _asyncToGenerator( /*#__PURE__*/regeneratorRuntime.mark(function _callee2() {
+      var deleted, continuationToken, page, contents, keys;
+      return regeneratorRuntime.wrap(function _callee2$(_context2) {
+        while (1) {
+          switch (_context2.prev = _context2.next) {
+            case 0:
+              deleted = 0;
+              continuationToken = void 0;
+
+            case 2:
+              _context2.next = 4;
+              return listPage(continuationToken);
+
+            case 4:
+              page = _context2.sent;
+              contents = Array.isArray(page && page.Contents) ? page.Contents : [];
+              keys = contents.map(function (o) {
+                return { Key: o.Key };
+              }).filter(function (o) {
+                return o.Key;
+              });
+
+              if (!keys.length) {
+                _context2.next = 11;
+                break;
+              }
+
+              _context2.next = 10;
+              return deleteBatch(keys);
+
+            case 10:
+              deleted += keys.length;
+
+            case 11:
+              continuationToken = page && page.IsTruncated ? page.NextContinuationToken : null;
+
+            case 12:
+              if (continuationToken) {
+                _context2.next = 2;
+                break;
+              }
+
+            case 13:
+              return _context2.abrupt('return', deleted);
+
+            case 14:
+            case 'end':
+              return _context2.stop();
+          }
+        }
+      }, _callee2, _this3);
+    }))();
+  }
+
   s3() {
     var options = {
       bucket: this.bucket,
@@ -183,7 +275,7 @@ class Store extends _ghostStorageBase2.default {
   }
 
   save(image, targetDir) {
-    var _this3 = this;
+    var _this4 = this;
 
     var directory = targetDir || this.getTargetDir(this.pathPrefix);
     var originalName = image && (image.name || image.originalname) || '';
@@ -193,24 +285,24 @@ class Store extends _ghostStorageBase2.default {
     var name = sanitizeFileName(ext ? _path2.default.basename(normalizedName, ext) : _path2.default.basename(normalizedName));
 
     return new Promise(function (resolve, reject) {
-      Promise.all([buildUniqueFileName(_this3, directory, name, ext), readFileAsync(image.path)]).then(function (_ref2) {
-        var _ref3 = _slicedToArray(_ref2, 2),
-            fileName = _ref3[0],
-            file = _ref3[1];
+      Promise.all([buildUniqueFileName(_this4, directory, name, ext), readFileAsync(image.path)]).then(function (_ref3) {
+        var _ref4 = _slicedToArray(_ref3, 2),
+            fileName = _ref4[0],
+            file = _ref4[1];
 
         var config = {
           //ACL: this.acl,
           Body: file,
-          Bucket: _this3.bucket,
+          Bucket: _this4.bucket,
           CacheControl: `max-age=${30 * 24 * 60 * 60}`,
           ContentType: image.type,
           Key: stripLeadingSlash(fileName)
         };
-        if (_this3.serverSideEncryption !== '') {
-          config.ServerSideEncryption = _this3.serverSideEncryption;
+        if (_this4.serverSideEncryption !== '') {
+          config.ServerSideEncryption = _this4.serverSideEncryption;
         }
-        _this3.s3().putObject(config, function (err, data) {
-          return err ? reject(err) : resolve(`${_this3.host}/${fileName}`);
+        _this4.s3().putObject(config, function (err, data) {
+          return err ? reject(err) : resolve(`${_this4.host}/${fileName}`);
         });
       }).catch(function (err) {
         return reject(err);
@@ -219,12 +311,12 @@ class Store extends _ghostStorageBase2.default {
   }
 
   serve() {
-    var _this4 = this;
+    var _this5 = this;
 
     return function (req, res, next) {
-      return _this4.s3().getObject({
-        Bucket: _this4.bucket,
-        Key: stripLeadingSlash(stripEndingSlash(_this4.pathPrefix) + req.path)
+      return _this5.s3().getObject({
+        Bucket: _this5.bucket,
+        Key: stripLeadingSlash(stripEndingSlash(_this5.pathPrefix) + req.path)
       }).on('httpHeaders', function (statusCode, headers, response) {
         return res.set(headers);
       }).createReadStream().on('error', function (err) {
@@ -235,7 +327,7 @@ class Store extends _ghostStorageBase2.default {
   }
 
   read(options) {
-    var _this5 = this;
+    var _this6 = this;
 
     options = options || {};
 
@@ -244,13 +336,13 @@ class Store extends _ghostStorageBase2.default {
       var path = (options.path || '').replace(/\/$|\\$/, '');
 
       // check if path is stored in s3 handled by us
-      if (!path.startsWith(_this5.host)) {
+      if (!path.startsWith(_this6.host)) {
         reject(new Error(`${path} is not stored in s3`));
       }
-      path = path.substring(_this5.host.length);
+      path = path.substring(_this6.host.length);
 
-      _this5.s3().getObject({
-        Bucket: _this5.bucket,
+      _this6.s3().getObject({
+        Bucket: _this6.bucket,
         Key: stripLeadingSlash(path)
       }, function (err, data) {
         return err ? reject(err) : resolve(data.Body);
@@ -259,7 +351,7 @@ class Store extends _ghostStorageBase2.default {
   }
 
   list() {
-    var _this6 = this;
+    var _this7 = this;
 
     var options = arguments.length > 0 && arguments[0] !== undefined ? arguments[0] : {};
 
@@ -279,7 +371,7 @@ class Store extends _ghostStorageBase2.default {
     }
 
     return new Promise(function (resolve, reject) {
-      _this6.s3().listObjectsV2(params, function (err, data) {
+      _this7.s3().listObjectsV2(params, function (err, data) {
         if (err) {
           reject(err);
           return;
@@ -291,7 +383,7 @@ class Store extends _ghostStorageBase2.default {
         }).map(function (item) {
           return {
             key: item.Key,
-            url: `${_this6.host}/${item.Key}`,
+            url: `${_this7.host}/${item.Key}`,
             path: item.Key,
             name: item.Key.split('/').pop(),
             size: item.Size,
@@ -311,7 +403,7 @@ class Store extends _ghostStorageBase2.default {
   }
 
   getPresignedPutUrl() {
-    var _this7 = this;
+    var _this8 = this;
 
     var options = arguments.length > 0 && arguments[0] !== undefined ? arguments[0] : {};
 
@@ -337,7 +429,7 @@ class Store extends _ghostStorageBase2.default {
     }
 
     return new Promise(function (resolve, reject) {
-      _this7.s3().getSignedUrl('putObject', params, function (err, url) {
+      _this8.s3().getSignedUrl('putObject', params, function (err, url) {
         if (err) {
           reject(err);
           return;
@@ -346,7 +438,7 @@ class Store extends _ghostStorageBase2.default {
         resolve({
           uploadUrl: url,
           key,
-          url: `${_this7.host}/${key}`,
+          url: `${_this8.host}/${key}`,
           headers: {
             'Content-Type': contentType,
             'Cache-Control': cacheControl
