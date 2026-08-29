@@ -4,25 +4,6 @@
     "email": "hello@colinmeinke.com",
     "url": "https://colinmeinke.com"
   },
-  "babel": {
-    "plugins": [
-      "transform-object-rest-spread",
-      "add-module-exports"
-    ],
-    "presets": [
-      [
-        "env",
-        {
-          "targets": {
-            "node": "4.5"
-          },
-          "exclude": [
-            "transform-es2015-classes"
-          ]
-        }
-      ]
-    ]
-  },
   "bugs": {
     "url": "https://github.com/colinmeinke/ghost-storage-adapter-s3/issues"
   },
@@ -37,10 +18,9 @@
   },
   "description": "An AWS S3 storage adapter for Ghost 0.10+",
   "devDependencies": {
-    "babel-cli": "^6.14.0",
-    "babel-plugin-add-module-exports": "^0.2.1",
-    "babel-plugin-transform-object-rest-spread": "^6.8.0",
-    "babel-preset-env": "^1.6.0",
+    "@types/node": "^22.0.0",
+    "esbuild": "^0.24.0",
+    "typescript": "^5.6.0",
     "commitizen": "^2.8.6",
     "cz-conventional-changelog": "^1.2.0",
     "semantic-release": "^15.9.9",
@@ -64,11 +44,12 @@
     "url": "https://github.com/colinmeinke/ghost-storage-adapter-s3.git"
   },
   "scripts": {
-    "build": "babel ./src/index.js --out-file ./index.js",
+    "build": "tsc -p tsconfig.json && esbuild src/index.ts --bundle --platform=node --format=cjs --outfile=dist/index.js",
+    "build:ghost": "npm run build && target=\"${GHOST_CORE_CONTENT_DIR:-../../../../00-Ghost-5.116.2/ghost/core/content}/adapters/storage/s3\" && mkdir -p \"$target\" && cp -R dist index.js package.json \"$target/\"",
     "commit": "git-cz",
     "fix": "standard --fix",
     "lint": "standard --verbose | snazzy",
-    "prepublish": "npm run build",
+    "prepublishOnly": "npm run build",
     "semantic-release": "semantic-release",
     "test": "exit 0",
     "travis-deploy-once": "travis-deploy-once"

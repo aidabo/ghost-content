@@ -13,6 +13,57 @@ mkdir -p ./content/adapters/storage
 cp -r ./node_modules/ghost-storage-adapter-s3 ./content/adapters/storage/s3
 ```
 
+## Building from source
+
+This repository is written in TypeScript. The build bundles the adapter and its
+runtime dependencies into `dist/index.js`, so the adapter does not need a
+runtime `node_modules` directory.
+
+```shell
+cd adapters/storage/s3
+npm ci
+npm run build
+```
+
+The package entry point is `index.js`, which loads `dist/index.js`. This keeps
+the adapter compatible with Ghost's directory-based adapter loading:
+
+```text
+s3/index.js -> s3/dist/index.js
+```
+
+For the non-Docker Ghost development tree in this workspace, build and copy the
+compiled adapter to Ghost's content directory with:
+
+```shell
+npm run build:ghost
+```
+
+By default this synchronizes to:
+
+```text
+../../../../00-Ghost-5.116.2/ghost/core/content/adapters/storage/s3
+```
+
+Set `GHOST_CORE_CONTENT_DIR` to use another Ghost content directory:
+
+```shell
+GHOST_CORE_CONTENT_DIR=/path/to/ghost/content npm run build:ghost
+```
+
+Ghost resolves the adapter below the configured content path. For example:
+
+```json
+{
+  "paths": {
+    "contentPath": "/home/aidabo/work/legacy/00-Ghost-5.116.2/ghost/core/content"
+  }
+}
+```
+
+The adapter is then loaded from
+`<contentPath>/adapters/storage/s3/index.js`.
+
 ## Configuration
 
 - For Image upload only
