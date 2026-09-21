@@ -253462,7 +253462,7 @@ var normalizeUploadFilename = (value) => {
   const deduped = raw.match(/^(.*\.[a-z0-9]+)-[a-z0-9_-]+$/i);
   return deduped ? deduped[1] : raw;
 };
-var sanitizeFileName = (fileName) => fileName.replace(/[^\w.\-()+\u3040-\u30ff\u3400-\u9fff]/g, "-");
+var sanitizeFileName = (fileName) => String(fileName || "").normalize("NFC").replace(/[\\/\0]/g, "-").replace(/[^\p{L}\p{N}\p{M}._()+-]/gu, "-");
 var buildUniqueFileName = async (store, dir, name, ext) => {
   let index = 0;
   while (true) {

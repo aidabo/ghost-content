@@ -12,7 +12,9 @@ const normalizeUploadFilename = (value: unknown): string => {
   const deduped = raw.match(/^(.*\.[a-z0-9]+)-[a-z0-9_-]+$/i)
   return deduped ? deduped[1] : raw
 }
-const sanitizeFileName = (fileName: string): string => fileName.replace(/[^\w.\-()+\u3040-\u30ff\u3400-\u9fff]/g, '-')
+// S3 accepts UTF-8 object keys. Keep Unicode letters/numbers/marks (including
+// CJK and full-width digits) and replace only path/control/unsafe punctuation.
+const sanitizeFileName = (fileName: string): string => String(fileName || '').normalize('NFC').replace(/[\\/\0]/g, '-').replace(/[^\p{L}\p{N}\p{M}._()+-]/gu, '-')
 
 interface UploadImage { path: string; name?: string; originalname?: string; type?: string }
 interface ListOptions { prefix?: string; limit?: string | number; continuationToken?: string; next_cursor?: string }
