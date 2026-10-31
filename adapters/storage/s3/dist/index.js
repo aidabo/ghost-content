@@ -253457,6 +253457,7 @@ var readFileAsync = (fp) => new Promise((resolve, reject) => (0, import_fs.readF
 var stripLeadingSlash = (s) => s.indexOf("/") === 0 ? s.substring(1) : s;
 var stripEndingSlash = (s) => s.indexOf("/") === s.length - 1 ? s.substring(0, s.length - 1) : s;
 var ensureEndingSlash = (s) => s && s.indexOf("/") !== s.length - 1 ? `${s}/` : s;
+var encodeCopySource = (bucket, key) => [bucket, ...key.split("/")].map(encodeURIComponent).join("/");
 var normalizeUploadFilename = (value) => {
   const raw = String(value || "").trim() || "upload.bin";
   const deduped = raw.match(/^(.*\.[a-z0-9]+)-[a-z0-9_-]+$/i);
@@ -253491,6 +253492,18 @@ var Store = class extends BaseStore {
   delete(fileName, targetDir) {
     const directory = targetDir || this.getTargetDir(this.pathPrefix);
     return new Promise((resolve) => this.s3().deleteObject({ Bucket: this.bucket, Key: stripLeadingSlash(path.join(directory, fileName)) }, (err) => resolve(!err)));
+  }
+  // Server-side copy used by Ghost social-gallery copyToProject / copyToJob.
+  // Both arguments are full bucket keys (already including pathPrefix, no host);
+  // resolves to the public URL of the copy (`${host}/${destKey}`), like save().
+  copy(sourceKey, destKey) {
+    const source = stripLeadingSlash(String(sourceKey || "").trim());
+    const dest = stripLeadingSlash(String(destKey || "").trim());
+    if (!source) return Promise.reject(new Error("source key is required"));
+    if (!dest) return Promise.reject(new Error("destination key is required"));
+    const params = { Bucket: this.bucket, CopySource: encodeCopySource(this.bucket, source), Key: dest, MetadataDirective: "COPY" };
+    if (this.serverSideEncryption) params.ServerSideEncryption = this.serverSideEncryption;
+    return new Promise((resolve, reject) => this.s3().copyObject(params, (err) => err ? reject(err) : resolve(`${this.host}/${dest}`)));
   }
   exists(fileName, targetDir) {
     return new Promise((resolve) => this.s3().getObject({ Bucket: this.bucket, Key: stripLeadingSlash(path.join(targetDir, fileName)) }, (err) => resolve(!err)));

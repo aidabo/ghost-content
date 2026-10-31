@@ -7,6 +7,9 @@ const readFileAsync = (fp: string): Promise<Buffer> => new Promise((resolve, rej
 const stripLeadingSlash = (s: string): string => s.indexOf('/') === 0 ? s.substring(1) : s
 const stripEndingSlash = (s: string): string => s.indexOf('/') === (s.length - 1) ? s.substring(0, s.length - 1) : s
 const ensureEndingSlash = (s: string): string => (s && s.indexOf('/') !== (s.length - 1)) ? `${s}/` : s
+// CopySource must be URL-encoded. Encode each path segment so Unicode (e.g. Japanese)
+// keys work while keeping '/' separators intact.
+const encodeCopySource = (bucket: string, key: string): string => [bucket, ...key.split('/')].map(encodeURIComponent).join('/')
 const normalizeUploadFilename = (value: unknown): string => {
   const raw = String(value || '').trim() || 'upload.bin'
   const deduped = raw.match(/^(.*\.[a-z0-9]+)-[a-z0-9_-]+$/i)
@@ -58,6 +61,19 @@ class Store extends (BaseStore as any) {
   delete (fileName: string, targetDir?: string): Promise<boolean> {
     const directory = targetDir || (this as any).getTargetDir(this.pathPrefix)
     return new Promise(resolve => this.s3().deleteObject({ Bucket: this.bucket, Key: stripLeadingSlash(path.join(directory, fileName)) }, err => resolve(!err)))
+  }
+
+  // Server-side copy used by Ghost social-gallery copyToProject / copyToJob.
+  // Both arguments are full bucket keys (already including pathPrefix, no host);
+  // resolves to the public URL of the copy (`${host}/${destKey}`), like save().
+  copy (sourceKey: string, destKey: string): Promise<string> {
+    const source = stripLeadingSlash(String(sourceKey || '').trim())
+    const dest = stripLeadingSlash(String(destKey || '').trim())
+    if (!source) return Promise.reject(new Error('source key is required'))
+    if (!dest) return Promise.reject(new Error('destination key is required'))
+    const params: AWS.S3.CopyObjectRequest = { Bucket: this.bucket!, CopySource: encodeCopySource(this.bucket!, source), Key: dest, MetadataDirective: 'COPY' }
+    if (this.serverSideEncryption) params.ServerSideEncryption = this.serverSideEncryption
+    return new Promise((resolve, reject) => this.s3().copyObject(params, err => err ? reject(err) : resolve(`${this.host}/${dest}`)))
   }
 
   exists (fileName: string, targetDir: string): Promise<boolean> {
