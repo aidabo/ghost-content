@@ -10,8 +10,10 @@ MySQL/Redis、Ghost backend、Estate frontendまでの初回構築と起動順�
 
 ```bash
 cd ~/work/legacy/00-Ghost-5.116.2
+readlink ghost/core/content/adapters
 readlink -f ghost/core/content/adapters
-# ~/work/legacy/07-ghost-content/adapters を指す
+# 相対link: ../../../../07-ghost-content/adapters
+# 解決先: ~/work/legacy/07-ghost-content/adapters
 ```
 
 S3 keyやpasswordはGhostの環境変数から渡します。secretをGhostの`config.development.json`やこのrepositoryへ保存しないでください。
