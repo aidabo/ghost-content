@@ -51,7 +51,7 @@
     "lint": "standard --verbose | snazzy",
     "prepublishOnly": "npm run build",
     "semantic-release": "semantic-release",
-    "test": "exit 0",
+    "test": "node --test test/",
     "travis-deploy-once": "travis-deploy-once"
   },
   "version": "0.0.0-development"
