@@ -78,6 +78,7 @@ npm run build        # src/index.ts → dist/index.js
 
 ## 詳しい文書
 
+- [ローカル全体環境ガイド](https://github.com/aidabo/jibunsee-react/blob/main/docs/development/00-local-full-stack.md) — repository取得からGhost・Frontendのbuildと起動まで
 - [03-backend-ghost.md](https://github.com/aidabo/jibunsee-react/blob/main/docs/development/03-backend-ghost.md) — Ghost の起動と S3 の env
 - [01-workspace.md](https://github.com/aidabo/jibunsee-react/blob/main/docs/development/01-workspace.md) — リポジトリの置き場所とリンク
 - adapter の元の説明（英語）は `adapters/storage/s3/README.md`、ライセンスは `adapters/storage/s3/LICENSE.md`。
